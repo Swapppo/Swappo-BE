@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import timedelta
+from sqlalchemy.orm import Session
+import os
 
 from .models import (
     UserCreate, UserLogin, UserResponse, Token, 
@@ -11,9 +13,22 @@ from .auth import (
     create_refresh_token, verify_token, get_current_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from .database import (
-    get_user_by_email, create_user, update_user_password, get_user_by_id
-)
+
+# Check if we should use SQL database or in-memory
+USE_SQL_DB = os.getenv("DATABASE_URL") is not None
+
+if USE_SQL_DB:
+    from .database_sql import (
+        get_user_by_email, create_user, update_user_password, get_user_by_id
+    )
+    from .db_config import get_db, init_db
+    
+    # Initialize database tables
+    init_db()
+else:
+    from .database import (
+        get_user_by_email, create_user, update_user_password, get_user_by_id
+    )
 
 app = FastAPI(
     title="Authentication Microservice",
@@ -53,10 +68,10 @@ async def health_check():
 
 
 @app.post("/api/v1/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate):
+async def register(user_data: UserCreate, db: Session = Depends(get_db) if USE_SQL_DB else None):
     """Register a new user."""
     # Check if user already exists
-    existing_user = get_user_by_email(user_data.email)
+    existing_user = get_user_by_email(db, user_data.email) if USE_SQL_DB else get_user_by_email(user_data.email)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -65,21 +80,19 @@ async def register(user_data: UserCreate):
     
     # Hash password and create user
     hashed_password = get_password_hash(user_data.password)
-    user = create_user(
-        email=user_data.email,
-        username=user_data.username,
-        hashed_password=hashed_password,
-        full_name=user_data.full_name
-    )
+    if USE_SQL_DB:
+        user = create_user(db, user_data.email, user_data.username, hashed_password, user_data.full_name)
+    else:
+        user = create_user(user_data.email, user_data.username, hashed_password, user_data.full_name)
     
     return UserResponse(**user)
 
 
 @app.post("/api/v1/auth/login", response_model=Token)
-async def login(user_credentials: UserLogin):
+async def login(user_credentials: UserLogin, db: Session = Depends(get_db) if USE_SQL_DB else None):
     """Login user and return access and refresh tokens."""
     # Get user from database
-    user = get_user_by_email(user_credentials.email)
+    user = get_user_by_email(db, user_credentials.email) if USE_SQL_DB else get_user_by_email(user_credentials.email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -116,7 +129,7 @@ async def login(user_credentials: UserLogin):
 
 
 @app.post("/api/v1/auth/refresh", response_model=Token)
-async def refresh_token(token_data: RefreshTokenRequest):
+async def refresh_token(token_data: RefreshTokenRequest, db: Session = Depends(get_db) if USE_SQL_DB else None):
     """Refresh access token using refresh token."""
     # Verify refresh token
     payload = verify_token(token_data.refresh_token, "refresh")
@@ -130,7 +143,7 @@ async def refresh_token(token_data: RefreshTokenRequest):
         )
     
     # Verify user still exists and is active
-    user = get_user_by_id(user_id)
+    user = get_user_by_id(db, user_id) if USE_SQL_DB else get_user_by_id(user_id)
     if not user or not user.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -153,9 +166,9 @@ async def refresh_token(token_data: RefreshTokenRequest):
 
 
 @app.get("/api/v1/auth/me", response_model=UserResponse)
-async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+async def get_current_user_info(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db) if USE_SQL_DB else None):
     """Get current authenticated user information."""
-    user = get_user_by_id(current_user["user_id"])
+    user = get_user_by_id(db, current_user["user_id"]) if USE_SQL_DB else get_user_by_id(current_user["user_id"])
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -168,10 +181,11 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 @app.post("/api/v1/auth/change-password")
 async def change_password(
     password_data: ChangePassword,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db) if USE_SQL_DB else None
 ):
     """Change user password."""
-    user = get_user_by_id(current_user["user_id"])
+    user = get_user_by_id(db, current_user["user_id"]) if USE_SQL_DB else get_user_by_id(current_user["user_id"])
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -187,7 +201,10 @@ async def change_password(
     
     # Update password
     new_hashed_password = get_password_hash(password_data.new_password)
-    update_user_password(current_user["user_id"], new_hashed_password)
+    if USE_SQL_DB:
+        update_user_password(db, current_user["user_id"], new_hashed_password)
+    else:
+        update_user_password(current_user["user_id"], new_hashed_password)
     
     return {"message": "Password changed successfully"}
 

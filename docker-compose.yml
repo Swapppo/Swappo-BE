@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: swappo_postgres
+    environment:
+      POSTGRES_USER: swappo
+      POSTGRES_PASSWORD: swappo_password
+      POSTGRES_DB: swappo_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swappo -d swappo_auth"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: swappo_api
+    environment:
+      DATABASE_URL: postgresql://swappo:swappo_password@db:5432/swappo_auth
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      REFRESH_SECRET_KEY: ${REFRESH_SECRET_KEY:-your-refresh-secret-key-change-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      ENVIRONMENT: production
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
