@@ -21,7 +21,9 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
     return users_db.get(user_id)
 
 
-def create_user(email: str, username: str, hashed_password: str, full_name: Optional[str] = None) -> dict:
+def create_user(
+    email: str, username: str, hashed_password: str, full_name: Optional[str] = None
+) -> dict:
     """Create a new user."""
     user_id = str(uuid.uuid4())
     user = {
@@ -31,7 +33,7 @@ def create_user(email: str, username: str, hashed_password: str, full_name: Opti
         "hashed_password": hashed_password,
         "full_name": full_name,
         "created_at": datetime.utcnow(),
-        "is_active": True
+        "is_active": True,
     }
     users_db[user_id] = user
     user_email_index[email] = user_id

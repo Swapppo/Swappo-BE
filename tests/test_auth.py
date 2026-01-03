@@ -3,9 +3,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.database import users_db, user_email_index
 
-client = TestClient(
-    app
-)
+client = TestClient(app)
+
 
 @pytest.fixture(autouse=True)
 def clear_database():
@@ -37,7 +36,7 @@ def test_register_user():
         "email": "test@example.com",
         "username": "testuser",
         "password": "testpassword123",
-        "full_name": "Test User"
+        "full_name": "Test User",
     }
     response = client.post("/api/v1/auth/register", json=user_data)
     assert response.status_code == 201
@@ -54,11 +53,11 @@ def test_register_duplicate_email():
     user_data = {
         "email": "test@example.com",
         "username": "testuser",
-        "password": "testpassword123"
+        "password": "testpassword123",
     }
     # First registration
     client.post("/api/v1/auth/register", json=user_data)
-    
+
     # Second registration with same email
     response = client.post("/api/v1/auth/register", json=user_data)
     assert response.status_code == 400
@@ -71,15 +70,12 @@ def test_login_success():
     user_data = {
         "email": "test@example.com",
         "username": "testuser",
-        "password": "testpassword123"
+        "password": "testpassword123",
     }
     client.post("/api/v1/auth/register", json=user_data)
-    
+
     # Login
-    login_data = {
-        "email": "test@example.com",
-        "password": "testpassword123"
-    }
+    login_data = {"email": "test@example.com", "password": "testpassword123"}
     response = client.post("/api/v1/auth/login", json=login_data)
     assert response.status_code == 200
     data = response.json()
@@ -94,25 +90,19 @@ def test_login_wrong_password():
     user_data = {
         "email": "test@example.com",
         "username": "testuser",
-        "password": "testpassword123"
+        "password": "testpassword123",
     }
     client.post("/api/v1/auth/register", json=user_data)
-    
+
     # Login with wrong password
-    login_data = {
-        "email": "test@example.com",
-        "password": "wrongpassword"
-    }
+    login_data = {"email": "test@example.com", "password": "wrongpassword"}
     response = client.post("/api/v1/auth/login", json=login_data)
     assert response.status_code == 401
 
 
 def test_login_nonexistent_user():
     """Test login with nonexistent user."""
-    login_data = {
-        "email": "nonexistent@example.com",
-        "password": "testpassword123"
-    }
+    login_data = {"email": "nonexistent@example.com", "password": "testpassword123"}
     response = client.post("/api/v1/auth/login", json=login_data)
     assert response.status_code == 401
 
@@ -124,20 +114,19 @@ def test_get_current_user():
         "email": "test@example.com",
         "username": "testuser",
         "password": "testpassword123",
-        "full_name": "Test User"
+        "full_name": "Test User",
     }
     client.post("/api/v1/auth/register", json=user_data)
-    
-    login_response = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
-        "password": "testpassword123"
-    })
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "test@example.com", "password": "testpassword123"},
+    )
     token = login_response.json()["access_token"]
-    
+
     # Get current user
     response = client.get(
-        "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {token}"}
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -157,20 +146,19 @@ def test_refresh_token():
     user_data = {
         "email": "test@example.com",
         "username": "testuser",
-        "password": "testpassword123"
+        "password": "testpassword123",
     }
     client.post("/api/v1/auth/register", json=user_data)
-    
-    login_response = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
-        "password": "testpassword123"
-    })
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "test@example.com", "password": "testpassword123"},
+    )
     refresh_token = login_response.json()["refresh_token"]
-    
+
     # Refresh token
     response = client.post(
-        "/api/v1/auth/refresh",
-        json={"refresh_token": refresh_token}
+        "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
     )
     assert response.status_code == 200
     data = response.json()
@@ -184,39 +172,36 @@ def test_change_password():
     user_data = {
         "email": "test@example.com",
         "username": "testuser",
-        "password": "oldpassword123"
+        "password": "oldpassword123",
     }
     client.post("/api/v1/auth/register", json=user_data)
-    
-    login_response = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
-        "password": "oldpassword123"
-    })
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "test@example.com", "password": "oldpassword123"},
+    )
     token = login_response.json()["access_token"]
-    
+
     # Change password
     response = client.post(
         "/api/v1/auth/change-password",
-        json={
-            "old_password": "oldpassword123",
-            "new_password": "newpassword123"
-        },
-        headers={"Authorization": f"Bearer {token}"}
+        json={"old_password": "oldpassword123", "new_password": "newpassword123"},
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
-    
+
     # Try login with old password (should fail)
-    old_login = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
-        "password": "oldpassword123"
-    })
+    old_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "test@example.com", "password": "oldpassword123"},
+    )
     assert old_login.status_code == 401
-    
+
     # Try login with new password (should succeed)
-    new_login = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
-        "password": "newpassword123"
-    })
+    new_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "test@example.com", "password": "newpassword123"},
+    )
     assert new_login.status_code == 200
 
 
@@ -226,19 +211,18 @@ def test_logout():
     user_data = {
         "email": "test@example.com",
         "username": "testuser",
-        "password": "testpassword123"
+        "password": "testpassword123",
     }
     client.post("/api/v1/auth/register", json=user_data)
-    
-    login_response = client.post("/api/v1/auth/login", json={
-        "email": "test@example.com",
-        "password": "testpassword123"
-    })
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "test@example.com", "password": "testpassword123"},
+    )
     token = login_response.json()["access_token"]
-    
+
     # Logout
     response = client.post(
-        "/api/v1/auth/logout",
-        headers={"Authorization": f"Bearer {token}"}
+        "/api/v1/auth/logout", headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
