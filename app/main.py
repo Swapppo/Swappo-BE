@@ -174,7 +174,7 @@ async def login(
 @app.post("/api/v1/auth/refresh", response_model=Token)
 async def refresh_token(
     token_data: RefreshTokenRequest,
-    db: Session = Depends(get_db) if USE_SQL_DB else None,
+    db: Session = Depends(get_db) if USE_SQL_DB else Depends(lambda: None),
 ):
     """Refresh access token using refresh token."""
     # Verify refresh token
@@ -207,7 +207,7 @@ async def refresh_token(
 @app.get("/api/v1/auth/me", response_model=UserResponse)
 async def get_current_user_info(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db) if USE_SQL_DB else None,
+    db: Session = Depends(get_db) if USE_SQL_DB else Depends(lambda: None),
 ):
     """Get current authenticated user information."""
     user = (
@@ -227,7 +227,7 @@ async def get_current_user_info(
 async def change_password(
     password_data: ChangePassword,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db) if USE_SQL_DB else None,
+    db: Session = Depends(get_db) if USE_SQL_DB else Depends(lambda: None),
 ):
     """Change user password."""
     user = (
